@@ -59,7 +59,7 @@ class Node_control(object):
         if self.params["visualize"]:
             self.visualizer.show(self.frame, detected, box, mask)
         if detected:
-            self.pub.publish(AngledBox(self.box8to5(box).tolist()))
+            self.pub.publish(AngledBox(box8to5(box).tolist()))
 
 
     def wait_for_new_image(self):
