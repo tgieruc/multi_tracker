@@ -1,0 +1,6 @@
+[submodule "src/lib/pysot"]
+	path = src/lib/pysot
+	url = https://github.com/tgieruc/pysot
+[submodule "src/lib/yolov5"]
+	path = src/lib/yolov5
+	url = https://github.com/ultralytics/yolov5
