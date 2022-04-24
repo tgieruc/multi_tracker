@@ -4,3 +4,6 @@
 [submodule "src/lib/yolov5"]
 	path = src/lib/yolov5
 	url = https://github.com/ultralytics/yolov5
+[submodule "src/lib/detectron2"]
+	path = src/lib/detectron2
+	url = https://github.com/facebookresearch/detectron2
