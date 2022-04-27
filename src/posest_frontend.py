@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
 
-import time
-
 import cv2
 import numpy as np
 
 import rospy
 from cv_bridge import CvBridge
-from detector import Detector
 from sensor_msgs.msg import Image
-from tracker import Tracker
-from quad_msgs.msg import AngledBox
-from lib.utils import create_angled_box, box8to5
-
-import rospkg
+from quad_msgs.msg import AngledBox, AngledBoxArray
+from lib.utils import box8to5
+from frontend import Frontend
 
 
-class Node_control(object):
+class NodeControl(object):
     def __init__(self):
 
         self.frame = None
@@ -29,7 +24,7 @@ class Node_control(object):
         self.frontend = Frontend(self.params)
 
         rospy.Subscriber(self.params["input"], Image, self.image_callback)
-        self.pub = rospy.Publisher("/posest/AngledBox", AngledBox)
+        self.pub = rospy.Publisher("/posest/AngledBoxArray", AngledBoxArray)
 
     def get_param(self):
         detector = rospy.get_param("/posest/frontend/detector")
@@ -41,6 +36,7 @@ class Node_control(object):
         visualize = rospy.get_param("/posest/frontend/visualize")
         detector_only = rospy.get_param("/posest/frontend/detector_only")
         redetect_time = rospy.get_param("/posest/frontend/redetect_time")
+        number_drones = rospy.get_param("/posest/frontend/number_drones")
 
         self.params = {"detector": detector,
                        "detector_weights": detector_weights,
@@ -50,17 +46,23 @@ class Node_control(object):
                        "input": input,
                        "visualize": visualize,
                        "detector_only": detector_only,
-                       "redetect_time": redetect_time
+                       "redetect_time": redetect_time,
+                       "number_drones": number_drones
                        }
 
     def spin(self):
         self.wait_for_new_image()
-        detected, box, mask = self.frontend.detect(self.frame)
-        if self.params["visualize"]:
-            self.visualizer.show(self.frame, detected, box, mask)
-        if detected:
-            self.pub.publish(AngledBox(box8to5(box).tolist()))
+        detected, boxes, mask = self.frontend.detect(self.frame)
 
+        if self.params["visualize"]:
+            self.visualizer.show(self.frame, detected, boxes, mask)
+
+        if boxes is not None:
+            angled_box_array = AngledBoxArray()
+            angled_box_array.angledbox_array = []
+            for box in boxes:
+                angled_box_array.angledbox_array.append(AngledBox(box8to5(box).tolist()))
+            self.pub.publish(angled_box_array)
 
     def wait_for_new_image(self):
         """ waits until image_callback announce a new image"""
@@ -81,69 +83,25 @@ class Visualizer(object):
         self.input = input_choice
         cv2.namedWindow(input_choice, cv2.WND_PROP_FULLSCREEN)
 
-    def show(self, frame, detected, box, mask):
+    def show(self, frame, detected, boxes, masks):
         """Display the frame in a cv2 window. Box is either in xyxy format or polygon xyxyxyxy"""
-        if box is not None and detected:
-            cv2.polylines(frame, [box.reshape((-1, 1, 2))],
-                          True, (0, 255, 0), 3)
-            if mask is not None:
-                frame = cv2.addWeighted(frame, 0.77, mask, 0.23, -1)
+        if detected > 0:
+            if boxes is not None:
+                for box in boxes:
+                    cv2.polylines(frame, [box.reshape((-1, 1, 2))], True, (0, 255, 0), 3)
+            if masks is not None:
+                frame = cv2.addWeighted(frame, 0.77, masks, 0.23, -1)
         cv2.imshow(self.input, frame)
         cv2.waitKey(3)
 
 
-class Frontend(object):
-    def __init__(self, params):
-        self.params = params
-        rospack = rospkg.RosPack()
-        path = rospack.get_path('posest_frontend')
-        self.detector = Detector(self.params, path)
-        self.tracker = Tracker(self.params, path)
-        self.detected = False
-        self.last_detection_time = time.time()
-        self.position = None
-
-    def first_detection(self, frame):
-        self.detected, box = self.detector.inference(frame)
-        if self.detected:
-            self.tracker.init_tracker(frame, box.numpy())
-            self.position = np.mean(box.numpy().reshape(2, 2), axis=0)
-            return box
-        return None
-
-    def check_detection(self, frame):
-        self.last_detection_time = time.time()
-        self.detected, new_box = self.detector.inference(frame)
-        if self.detected:
-            new_position = np.mean(new_box.numpy().reshape(2, 2), axis=0)
-            if np.linalg.norm(new_position - self.position) > frame.shape[0] / 10:
-                print("Tracker reinitialized")
-                self.tracker.init_tracker(frame, new_box.numpy())
-                self.position = new_position
-
-    def detect(self, frame):
-        mask = None
-
-        if self.params["detector_only"]:
-            self.detected, box = self.detector.inference(frame)
-        else:
-            if not self.detected:
-                box = self.first_detection(frame)
-            else:
-                # Check if new initialization of tracker is needed
-                if ((time.time() - self.last_detection_time) > self.params["redetect_time"]) and (self.params["redetect_time"] != 0):
-                    self.check_detection(frame)
-
-                box, mask = self.tracker.track_frame(frame)
-
-        return self.detected, create_angled_box(box), mask
 
 
 if __name__ == '__main__':
     rospy.init_node('posest_frontend_node', anonymous=True)
     loop_rate = rospy.Rate(10)
 
-    my_node = Node_control()
+    my_node = NodeControl()
     while not rospy.is_shutdown():
         my_node.spin()
         loop_rate.sleep()

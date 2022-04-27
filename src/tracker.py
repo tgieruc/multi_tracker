@@ -28,6 +28,7 @@ class Tracker(object):
         self.tracker = build_tracker(model)
 
     def init_tracker(self, frame, init_rect):
+        init_rect = init_rect.copy()
         init_rect[2:] -= init_rect[:2]
         self.tracker.init(frame, init_rect)
 

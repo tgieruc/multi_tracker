@@ -17,8 +17,9 @@ def box8to5(box):
     return np.array([center[0], center[1], box_size[0], box_size[1], angle])
 
 
-def create_angled_box(box):
-    if box is not None:
-        if box.shape == (4,):
-            box = np.array([box[0], box[1], box[0], box[3], box[2], box[3], box[2], box[1]])
-    return box
+def create_angled_box(boxes):
+    if boxes is not None:
+        if boxes.shape[1] == 4:
+            boxes = np.dstack([boxes[:,0], boxes[:,1], boxes[:,0], boxes[:,3], boxes[:,2], boxes[:,3], boxes[:,2], boxes[:,1]]).reshape(-1,8).astype(np.int32)
+
+    return boxes

@@ -37,10 +37,11 @@ class Detector(object):
         results = self.model(img)
         if self.params["detector"] == "YOLOv5":
             if len(results.xyxy[0]) == 0:
-                return False, torch.zeros(4)
+                return 0, None
             else:
-                if results.xyxy[0][0, 4] > 0.8:
-                    return True, results.xyxy[0][0, :4].int().cpu()
+                index_threshold = results.xyxy[0].data[:, 4] > 0.5
+                index_threshold[self.params["number_drones"]-1:] = False
+                return len(torch.where(index_threshold == True)), results.xyxy[0].data[index_threshold,:4].int().cpu().numpy()
         else:
             if len(results) > 0:
                 if len(results["instances"].pred_boxes) > 0:
