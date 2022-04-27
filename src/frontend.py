@@ -6,6 +6,39 @@ from detector import Detector
 from tracker import Tracker
 from lib.utils import create_angled_box
 
+import sys, os
+sys.path.insert(0,os.path.join(os.path.dirname(__file__), "lib/ByteTrack"))
+from yolox.tracker.byte_tracker import BYTETracker
+
+class Bbox4(object):
+    def __init__(self, id, bbox, bbox_type="xyxy"):
+        self.id = id
+        self.bbox = np.array(bbox).reshape(-1,4)
+        if bbox_type == "xywh":
+            self.bbox = np.hstack([self.bbox[:,:2], self.bbox[:,2:] + self.bbox[:,:2]])
+
+    def to_bbox5(self):
+        return Bbox5(self.id, np.hstack([self.bbox, np.zeros((len(self.bbox), 1))]))
+
+    def to_bbox8(self):
+        boxes = self.bbox
+        return Bbox8(self.id, np.dstack([boxes[:,0], boxes[:,1], boxes[:,0], boxes[:,3], boxes[:,2], boxes[:,3], boxes[:,2], boxes[:,1]]).reshape(-1,8).astype(np.int32))
+
+class Bbox5(object):
+    def __init__(self, id, bbox):
+        self.id = id
+        self.bbox = bbox
+
+    def to_bbox4(self):
+        return Bbox4(self.id, self.bbox[:,:4])
+
+class Bbox8(object):
+    def __init__(self, id, bbox):
+        self.id = id
+        self.bbox = bbox
+
+    def to_bbox8(self):
+        return self
 
 class Frontend(object):
     def __init__(self, params):
@@ -13,24 +46,39 @@ class Frontend(object):
         rospack = rospkg.RosPack()
         path = rospack.get_path('posest_frontend')
         self.detector = Detector(self.params, path)
-        self.bbox_identifier = BboxIdentifier(100, self.params["number_drones"] - 1)
-
-        self.tracker = []
-        for i in range(self.params["number_drones"] - 1):
-            self.tracker.append(Tracker(self.params, path))
-        self.active_tracker = np.zeros(self.params["number_drones"] - 1, dtype=bool)
+        self.bytetracker = BYTETracker(self.params)
+        if not params["detector_only"]:
+            self.tracker = []
+            for i in range(self.params["number_drones"] - 1):
+                self.tracker.append(Tracker(self.params, path))
+            self.active_tracker = np.zeros(self.params["number_drones"] - 1, dtype=bool)
         self.id_to_tracker = {}
         self.n_detection = 0
         self.last_detection_time = time.time()
         self.object_position = []
 
-    def first_detection(self, frame):
-        self.n_detection, boxes = self.detector.inference(frame)
+    def detector_detection(self, frame):
+        self.n_detection, inference = self.detector.inference(frame)
+        bboxes = None
         if self.n_detection > 0:
-            self.bbox_identifier.update(boxes)
-            self.add_tracker(self.bbox_identifier.id, frame, boxes)
+            online_targets = self.bytetracker.update(inference, [frame.shape[0], frame.shape[1]],[frame.shape[0], frame.shape[1]])
+            id = []
+            bbox = []
+            for target in online_targets:
+                id.append(target.track_id)
+                bbox.append(target.tlwh)
+            bboxes = Bbox4(id, bbox, "xywh")
 
-        return boxes
+        return bboxes
+
+    def first_detection(self, frame):
+        bboxes = self.detector_detection(frame)
+        if self.n_detection > 0:
+            self.init_trackers(bboxes)
+        return bboxes
+
+    def init_trackers(self, bboxes):
+        pass
 
     def add_tracker(self, id_to_add, frame, new_boxes):
         if id_to_add is not None:
@@ -60,45 +108,28 @@ class Frontend(object):
         self.add_tracker(new_id, frame, new_boxes)
         self.remove_tracker(prev_id)
 
-
-        # if (self.bbox_identifier.id is None) and (prev_id is not None):
-        #     self.active_tracker = np.zeros(self.params["number_drones"] - 1, dtype=bool)
-        # elif len(self.bbox_identifier.id) > len(prev_id):
-        #     free_tracker = np.where(self.active_tracker == False)
-        #     if len(free_tracker[0]) > 0:
-        #         for id in self.bbox_identifier.id:
-        #             if not (prev_id == id).any():
-        #                 new_tracker_id = free_tracker[0][0]
-        #                 self.id_to_tracker[id] = new_tracker_id
-        #                 self.active_tracker[new_tracker_id] = True
-        #                 self.tracker[new_tracker_id].init_tracker(frame, new_boxes[new_tracker_id])
-        # elif len(self.bbox_identifier.id) < len(prev_id):
-        #     for i in prev_id:
-        #         if not (self.bbox_identifier.id == i).any():
-        #             self.active_tracker[self.id_to_tracker[i]] = False
-
     def detect(self, frame):
         masks = None
 
         if self.params["detector_only"]:
-            self.n_detection, boxes = self.detector.inference(frame)
+            bboxes = self.detector_detection(frame)
         else:
             if self.n_detection == 0:
-                boxes = self.first_detection(frame)
+                bboxes = self.first_detection(frame)
             else:
                 # Check if new initialization of tracker is needed
                 if ((time.time() - self.last_detection_time) > self.params["redetect_time"]) and (
                         self.params["redetect_time"] != 0):
                     self.check_detection(frame)
 
-                boxes = []
+                bboxes = []
                 masks = []
                 for id in np.argwhere(self.active_tracker == True).flatten():
                     box, mask = self.tracker[id].track_frame(frame)
-                    boxes.append(box)
+                    bboxes.append(box)
                     masks.append(mask)
-                if len(boxes) > 0:
-                    boxes = np.array(boxes)
+                if len(bboxes) > 0:
+                    boxes = np.array(bboxes)
                 else:
                     boxes = None
                 if len(masks) > 0:
@@ -106,50 +137,50 @@ class Frontend(object):
                 else:
                     masks = None
 
-        return self.n_detection, create_angled_box(boxes), masks
+        return self.n_detection, bboxes, masks
 
 
-class BboxIdentifier(object):
-    def __init__(self, threshold, max_id):
-        self.old_predictions = None
-        self.center = None
-        self.id = None
-        self.threshold = threshold
-        self.max_id = max_id
-
-    def update(self, new_prediction):
-        # if nothing n_detection, reset
-        if new_prediction is None:
-            self.old_predictions = None
-            self.center = None
-            self.id = None
-        elif self.old_predictions is None:
-            # if no predictions was done, initialize
-            self._initialize(new_prediction)
-        else:
-            self._update_predictions(new_prediction)
-
-    def _initialize(self, new_prediction):
-        self.old_predictions = new_prediction
-        self.id = np.arange(len(new_prediction))
-        self.center = new_prediction.reshape(-1, 2, 2).mean(axis=1)
-
-    def _update_predictions(self, new_prediction):
-        new_center = np.zeros((len(new_prediction), 2))
-        new_id = np.arange(max(self.id) + 1, max(self.id) + 1 + len(new_prediction))
-        for i in range(len(new_prediction)):
-            new_center[i] = new_prediction[i].reshape(-1, 2).mean(axis=0)
-            threshold = (new_prediction.reshape(-1, 2, 2)[i, 1, :] - new_prediction.reshape(-1, 2, 2)[i, 0, :])
-            for idx, center in enumerate(self.center):
-                if (np.linalg.norm(new_center[i] - center) < 2*threshold).all():
-                    new_id[i] = self.id[idx]
-
-        filter = []
-        if len(new_center) > 1:
-            for i in range(len(new_center) - 1):
-                for j in range(i+1, len(new_center)):
-                    if np.linalg.norm(new_center[i] - new_center[j]) < 100:
-                            filter.append(i)
-
-        self.id = np.delete(new_id, filter)
-        self.center = np.delete(new_center, filter, axis=0)
+# class BboxIdentifier(object):
+#     def __init__(self, threshold, max_id):
+#         self.old_predictions = None
+#         self.center = None
+#         self.id = None
+#         self.threshold = threshold
+#         self.max_id = max_id
+#
+#     def update(self, new_prediction):
+#         # if nothing n_detection, reset
+#         if new_prediction is None:
+#             self.old_predictions = None
+#             self.center = None
+#             self.id = None
+#         elif self.old_predictions is None:
+#             # if no predictions was done, initialize
+#             self._initialize(new_prediction)
+#         else:
+#             self._update_predictions(new_prediction)
+#
+#     def _initialize(self, new_prediction):
+#         self.old_predictions = new_prediction
+#         self.id = np.arange(len(new_prediction))
+#         self.center = new_prediction.reshape(-1, 2, 2).mean(axis=1)
+#
+#     def _update_predictions(self, new_prediction):
+#         new_center = np.zeros((len(new_prediction), 2))
+#         new_id = np.arange(max(self.id) + 1, max(self.id) + 1 + len(new_prediction))
+#         for i in range(len(new_prediction)):
+#             new_center[i] = new_prediction[i].reshape(-1, 2).mean(axis=0)
+#             threshold = (new_prediction.reshape(-1, 2, 2)[i, 1, :] - new_prediction.reshape(-1, 2, 2)[i, 0, :])
+#             for idx, center in enumerate(self.center):
+#                 if (np.linalg.norm(new_center[i] - center) < 2*threshold).all():
+#                     new_id[i] = self.id[idx]
+#
+#         filter = []
+#         if len(new_center) > 1:
+#             for i in range(len(new_center) - 1):
+#                 for j in range(i+1, len(new_center)):
+#                     if np.linalg.norm(new_center[i] - new_center[j]) < 100:
+#                             filter.append(i)
+#
+#         self.id = np.delete(new_id, filter)
+#         self.center = np.delete(new_center, filter, axis=0)

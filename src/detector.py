@@ -36,16 +36,19 @@ class Detector(object):
     def inference(self, img):
         results = self.model(img)
         if self.params["detector"] == "YOLOv5":
-            if len(results.xyxy[0]) == 0:
-                return 0, None
-            else:
+            if len(results.xyxy[0]) > 0:
                 index_threshold = results.xyxy[0].data[:, 4] > 0.5
                 index_threshold[self.params["number_drones"]-1:] = False
-                return len(torch.where(index_threshold == True)), results.xyxy[0].data[index_threshold,:4].int().cpu().numpy()
+                return len(torch.where(index_threshold == True)), results.xyxy[0].data[index_threshold,:5].cpu()
         else:
             if len(results) > 0:
-                if len(results["instances"].pred_boxes) > 0:
-                    box = results["instances"].pred_boxes.tensor[0].int().cpu()
-                    return True, box
+                n_result = len(results["instances"].pred_boxes)
+                if n_result > 0:
+                    box = results["instances"].pred_boxes.tensor.cpu()
+                    scores = results["instances"].scores.cpu()
+                    index_threshold = scores > 0.5
+                    index_threshold[self.params["number_drones"] - 1:] = False
 
-        return False, None
+                    return len(torch.where(index_threshold == True)), torch.cat([box, scores[:,None]], dim=1)[index_threshold]
+
+        return 0, None

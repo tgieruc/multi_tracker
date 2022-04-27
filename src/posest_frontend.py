@@ -8,7 +8,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from quad_msgs.msg import AngledBox, AngledBoxArray
 from lib.utils import box8to5
-from frontend import Frontend
+from frontend import Frontend, Bbox4, Bbox5, Bbox8
 
 
 class NodeControl(object):
@@ -24,19 +24,24 @@ class NodeControl(object):
         self.frontend = Frontend(self.params)
 
         rospy.Subscriber(self.params["input"], Image, self.image_callback)
-        self.pub = rospy.Publisher("/posest/AngledBoxArray", AngledBoxArray)
+        self.pub = rospy.Publisher("/posest/AngledBoxArray", AngledBoxArray, queue_size=10)
 
     def get_param(self):
-        detector = rospy.get_param("/posest/frontend/detector")
-        detector_weights = rospy.get_param("/posest/frontend/detector_weights")
-        detector_config = rospy.get_param("posest/frontend/detector_config")
-        tracker_config = rospy.get_param("/posest/frontend/tracker_config")
-        tracker_weights = rospy.get_param("/posest/frontend/tracker_weights")
+        detector = rospy.get_param("/posest/frontend/detector/name")
+        detector_weights = rospy.get_param("/posest/frontend/detector/weights")
+        detector_config = rospy.get_param("posest/frontend/detector/config")
+        tracker_config = rospy.get_param("/posest/frontend/tracker/config")
+        tracker_weights = rospy.get_param("/posest/frontend/tracker/weights")
         input = rospy.get_param("/posest/frontend/input")
         visualize = rospy.get_param("/posest/frontend/visualize")
         detector_only = rospy.get_param("/posest/frontend/detector_only")
         redetect_time = rospy.get_param("/posest/frontend/redetect_time")
         number_drones = rospy.get_param("/posest/frontend/number_drones")
+
+        track_thresh = rospy.get_param("/posest/frontent/bytetrack/track_thresh")
+        device = rospy.get_param("/posest/frontent/bytetrack/device")
+        track_buffer = rospy.get_param("/posest/frontent/bytetrack/track_buffer")
+        match_thresh = rospy.get_param("/posest/frontent/bytetrack/match_thresh")
 
         self.params = {"detector": detector,
                        "detector_weights": detector_weights,
@@ -47,7 +52,11 @@ class NodeControl(object):
                        "visualize": visualize,
                        "detector_only": detector_only,
                        "redetect_time": redetect_time,
-                       "number_drones": number_drones
+                       "number_drones": number_drones,
+                       "track_thresh": track_thresh,
+                       "device": device,
+                       "track_buffer": track_buffer,
+                       "match_thresh": match_thresh,
                        }
 
     def spin(self):
@@ -60,8 +69,9 @@ class NodeControl(object):
         if boxes is not None:
             angled_box_array = AngledBoxArray()
             angled_box_array.angledbox_array = []
-            for box in boxes:
-                angled_box_array.angledbox_array.append(AngledBox(box8to5(box).tolist()))
+            boxes = boxes.to_bbox5()
+            for i, box in enumerate(boxes.bbox):
+                angled_box_array.angledbox_array.append(AngledBox(boxes.id[i], box.tolist()))
             self.pub.publish(angled_box_array)
 
     def wait_for_new_image(self):
@@ -85,16 +95,30 @@ class Visualizer(object):
 
     def show(self, frame, detected, boxes, masks):
         """Display the frame in a cv2 window. Box is either in xyxy format or polygon xyxyxyxy"""
+        frame = np.ascontiguousarray(np.copy(frame))
+
+        def get_color(idx):
+            idx = idx * 3
+            color = ((37 * idx) % 255, (17 * idx) % 255, (29 * idx) % 255)
+
+            return color
+
         if detected > 0:
-            if boxes is not None:
-                for box in boxes:
-                    cv2.polylines(frame, [box.reshape((-1, 1, 2))], True, (0, 255, 0), 3)
+            boxes = boxes.to_bbox8()
+
+            for i, box in enumerate(boxes.bbox):
+                intbox = box.reshape((-1, 1, 2)).astype(int)
+                obj_id = int(boxes.id[i])
+                id_text = '{}'.format(int(obj_id))
+                color = get_color(abs(obj_id))
+                cv2.polylines(frame, [intbox], True, color, 3)
+
+                cv2.putText(frame, id_text, (intbox[0, 0, 0], intbox[0, 0, 1]), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255),
+                            thickness=2)
             if masks is not None:
                 frame = cv2.addWeighted(frame, 0.77, masks, 0.23, -1)
         cv2.imshow(self.input, frame)
         cv2.waitKey(3)
-
-
 
 
 if __name__ == '__main__':

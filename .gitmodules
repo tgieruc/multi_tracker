@@ -7,3 +7,6 @@
 [submodule "src/lib/detectron2"]
 	path = src/lib/detectron2
 	url = https://github.com/facebookresearch/detectron2
+[submodule "src/lib/ByteTrack"]
+	path = src/lib/ByteTrack
+	url = https://github.com/tgieruc/ByteTrack
