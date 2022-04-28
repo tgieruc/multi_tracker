@@ -21,9 +21,6 @@ class Detector(object):
         elif self.params["detector"] == "Detectron2":
             cfg = get_cfg()
             cfg.merge_from_file(path + '/frontend_config/' + self.params["detector_config"])
-            # cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
-            # cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.4
-
             cfg.MODEL.WEIGHTS = path + '/frontend_config/' + self.params["detector_weights"]
 
             self.model = DefaultPredictor(cfg)
@@ -39,7 +36,9 @@ class Detector(object):
             if len(results.xyxy[0]) > 0:
                 index_threshold = results.xyxy[0].data[:, 4] > 0.5
                 index_threshold[self.params["number_drones"]-1:] = False
-                return len(torch.where(index_threshold == True)), results.xyxy[0].data[index_threshold,:5].cpu()
+                if self.params["detector_only"]:
+                    results.xyxy[0].data[index_threshold, 4] = 1
+                return len(torch.where(index_threshold == True)[0]), results.xyxy[0].data[index_threshold,:5].cpu()
         else:
             if len(results) > 0:
                 n_result = len(results["instances"].pred_boxes)
@@ -49,6 +48,6 @@ class Detector(object):
                     index_threshold = scores > 0.5
                     index_threshold[self.params["number_drones"] - 1:] = False
 
-                    return len(torch.where(index_threshold == True)), torch.cat([box, scores[:,None]], dim=1)[index_threshold]
+                    return len(torch.where(index_threshold == True)[0]), torch.cat([box, scores[:,None]], dim=1)[index_threshold]
 
         return 0, None

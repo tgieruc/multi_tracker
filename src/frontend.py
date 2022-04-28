@@ -1,44 +1,19 @@
 import time
 import rospkg
 import numpy as np
-
+import torch
 from detector import Detector
 from tracker import Tracker
-from lib.utils import create_angled_box
+from lib.utils import Bbox4, Bbox5, Bbox8
 
 import sys, os
-sys.path.insert(0,os.path.join(os.path.dirname(__file__), "lib/ByteTrack"))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "lib/ByteTrack"))
 from yolox.tracker.byte_tracker import BYTETracker
 
-class Bbox4(object):
-    def __init__(self, id, bbox, bbox_type="xyxy"):
-        self.id = id
-        self.bbox = np.array(bbox).reshape(-1,4)
-        if bbox_type == "xywh":
-            self.bbox = np.hstack([self.bbox[:,:2], self.bbox[:,2:] + self.bbox[:,:2]])
 
-    def to_bbox5(self):
-        return Bbox5(self.id, np.hstack([self.bbox, np.zeros((len(self.bbox), 1))]))
 
-    def to_bbox8(self):
-        boxes = self.bbox
-        return Bbox8(self.id, np.dstack([boxes[:,0], boxes[:,1], boxes[:,0], boxes[:,3], boxes[:,2], boxes[:,3], boxes[:,2], boxes[:,1]]).reshape(-1,8).astype(np.int32))
 
-class Bbox5(object):
-    def __init__(self, id, bbox):
-        self.id = id
-        self.bbox = bbox
-
-    def to_bbox4(self):
-        return Bbox4(self.id, self.bbox[:,:4])
-
-class Bbox8(object):
-    def __init__(self, id, bbox):
-        self.id = id
-        self.bbox = bbox
-
-    def to_bbox8(self):
-        return self
 
 class Frontend(object):
     def __init__(self, params):
@@ -52,16 +27,17 @@ class Frontend(object):
             for i in range(self.params["number_drones"] - 1):
                 self.tracker.append(Tracker(self.params, path))
             self.active_tracker = np.zeros(self.params["number_drones"] - 1, dtype=bool)
-        self.id_to_tracker = {}
         self.n_detection = 0
         self.last_detection_time = time.time()
-        self.object_position = []
+        self.tracker_center = np.zeros((self.params["number_drones"] - 1, 2))
+        self.frame = None
 
-    def detector_detection(self, frame):
-        self.n_detection, inference = self.detector.inference(frame)
+    def detection(self):
+        self.n_detection, inference = self.detector.inference(self.frame)
         bboxes = None
         if self.n_detection > 0:
-            online_targets = self.bytetracker.update(inference, [frame.shape[0], frame.shape[1]],[frame.shape[0], frame.shape[1]])
+            W, H = self.frame.shape[:2]
+            online_targets = self.bytetracker.update(inference, [W, H], [W, H])
             id = []
             bbox = []
             for target in online_targets:
@@ -71,116 +47,65 @@ class Frontend(object):
 
         return bboxes
 
-    def first_detection(self, frame):
-        bboxes = self.detector_detection(frame)
-        if self.n_detection > 0:
-            self.init_trackers(bboxes)
-        return bboxes
+    def detection_tracking(self):
+        self.n_detection, inference = self.detector.inference(self.frame)
+        bbox = Bbox4(np.arange(self.n_detection), inference[:,:4])
+        self.update_trackers(bbox)
+        return bbox
 
-    def init_trackers(self, bboxes):
-        pass
-
-    def add_tracker(self, id_to_add, frame, new_boxes):
-        if id_to_add is not None:
-            for id in id_to_add:
-                free_tracker = np.argwhere(self.active_tracker == False).flatten()
-                if len(free_tracker) > 0:
-                    new_tracker_id = free_tracker[0]
-                    self.id_to_tracker[id] = new_tracker_id
-                    self.active_tracker[new_tracker_id] = True
-                    self.tracker[new_tracker_id].init_tracker(frame, new_boxes[new_tracker_id])
-
-    def remove_tracker(self, id_to_remove):
-        for id in id_to_remove:
-            self.active_tracker[self.id_to_tracker[id]] = False
-
-    def check_detection(self, frame):
+    def update_trackers(self, bboxes):
         self.last_detection_time = time.time()
-        self.n_detection, new_boxes = self.detector.inference(frame)
-        prev_id = self.bbox_identifier.id
-        self.bbox_identifier.update(new_boxes)
-        new_id = self.bbox_identifier.id
 
-        for id in prev_id:
-            if (new_id ==id).any():
-                new_id = np.delete(new_id, np.argwhere(new_id==id))
-                prev_id = np.delete(prev_id, np.argwhere(prev_id==id))
-        self.add_tracker(new_id, frame, new_boxes)
-        self.remove_tracker(prev_id)
+        if bboxes is None:
+            self.active_tracker = np.zeros(self.params["number_drones"] - 1, dtype=bool)
+        else:
+            bboxes_with_tracker = bboxes.is_inside(self.tracker_center)
+            trackers_per_bbox = bboxes_with_tracker.sum(1)
+            ids_too_many_tracker = np.where(trackers_per_bbox > 1)
+            for i in ids_too_many_tracker:
+                tracker_to_disable = np.where(bboxes_with_tracker[i,:] == True)[0][1:]
+                self.active_tracker[tracker_to_disable] = False
+                self.tracker_center[tracker_to_disable] = np.array([0, 0])
+                bboxes_with_tracker[tracker_to_disable, i] = False
+
+            bboxes_without_tracker = np.where((bboxes_with_tracker==True).any(1) == False)[0]
+
+            for i in bboxes_without_tracker:
+                self.tracker[i].init_tracker(self.frame, bboxes.bbox[i])
+                self.active_tracker[i] = True
 
     def detect(self, frame):
         masks = None
-
+        self.frame = frame
+        bboxes = None
         if self.params["detector_only"]:
-            bboxes = self.detector_detection(frame)
+            bboxes = self.detection()
         else:
-            if self.n_detection == 0:
-                bboxes = self.first_detection(frame)
-            else:
-                # Check if new initialization of tracker is needed
-                if ((time.time() - self.last_detection_time) > self.params["redetect_time"]) and (
-                        self.params["redetect_time"] != 0):
-                    self.check_detection(frame)
+            if (self.n_detection == 0) or (((time.time() - self.last_detection_time) > self.params["redetect_time"]) and (
+                        self.params["redetect_time"] != 0)):
+                bboxes = self.detection_tracking()
 
-                bboxes = []
-                masks = []
-                for id in np.argwhere(self.active_tracker == True).flatten():
-                    box, mask = self.tracker[id].track_frame(frame)
-                    bboxes.append(box)
-                    masks.append(mask)
-                if len(bboxes) > 0:
-                    boxes = np.array(bboxes)
-                else:
-                    boxes = None
-                if len(masks) > 0:
-                    masks = np.array(masks).max(0)
-                else:
-                    masks = None
+            boxes = []
+            masks = []
+            ids   = []
+            for id in np.argwhere(self.active_tracker == True).flatten():
+                box, mask = self.tracker[id].track_frame(frame)
+                boxes.append(box)
+                masks.append(mask)
+                ids.append(id)
+            if len(boxes) > 0:
+                if boxes[0].shape[0] == 4:
+                    bboxes = Bbox4(np.array(ids).flatten(), boxes)
+                elif boxes[0].shape[0] == 8:
+                    bboxes = Bbox8(np.array(ids).flatten(), boxes)
+
+            else:
+                bboxes = None
+            if len(masks) > 0:
+                masks = np.array(masks).max(0)
+            else:
+                masks = None
+
+            self.tracker_center[ids] = bboxes.center()
 
         return self.n_detection, bboxes, masks
-
-
-# class BboxIdentifier(object):
-#     def __init__(self, threshold, max_id):
-#         self.old_predictions = None
-#         self.center = None
-#         self.id = None
-#         self.threshold = threshold
-#         self.max_id = max_id
-#
-#     def update(self, new_prediction):
-#         # if nothing n_detection, reset
-#         if new_prediction is None:
-#             self.old_predictions = None
-#             self.center = None
-#             self.id = None
-#         elif self.old_predictions is None:
-#             # if no predictions was done, initialize
-#             self._initialize(new_prediction)
-#         else:
-#             self._update_predictions(new_prediction)
-#
-#     def _initialize(self, new_prediction):
-#         self.old_predictions = new_prediction
-#         self.id = np.arange(len(new_prediction))
-#         self.center = new_prediction.reshape(-1, 2, 2).mean(axis=1)
-#
-#     def _update_predictions(self, new_prediction):
-#         new_center = np.zeros((len(new_prediction), 2))
-#         new_id = np.arange(max(self.id) + 1, max(self.id) + 1 + len(new_prediction))
-#         for i in range(len(new_prediction)):
-#             new_center[i] = new_prediction[i].reshape(-1, 2).mean(axis=0)
-#             threshold = (new_prediction.reshape(-1, 2, 2)[i, 1, :] - new_prediction.reshape(-1, 2, 2)[i, 0, :])
-#             for idx, center in enumerate(self.center):
-#                 if (np.linalg.norm(new_center[i] - center) < 2*threshold).all():
-#                     new_id[i] = self.id[idx]
-#
-#         filter = []
-#         if len(new_center) > 1:
-#             for i in range(len(new_center) - 1):
-#                 for j in range(i+1, len(new_center)):
-#                     if np.linalg.norm(new_center[i] - new_center[j]) < 100:
-#                             filter.append(i)
-#
-#         self.id = np.delete(new_id, filter)
-#         self.center = np.delete(new_center, filter, axis=0)

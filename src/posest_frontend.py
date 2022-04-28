@@ -7,8 +7,8 @@ import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from quad_msgs.msg import AngledBox, AngledBoxArray
-from lib.utils import box8to5
-from frontend import Frontend, Bbox4, Bbox5, Bbox8
+# from lib.utils import Bbox4, Bbox5, Bbox8
+from frontend import Frontend
 
 
 class NodeControl(object):
@@ -62,7 +62,6 @@ class NodeControl(object):
     def spin(self):
         self.wait_for_new_image()
         detected, boxes, mask = self.frontend.detect(self.frame)
-
         if self.params["visualize"]:
             self.visualizer.show(self.frame, detected, boxes, mask)
 
@@ -73,6 +72,8 @@ class NodeControl(object):
             for i, box in enumerate(boxes.bbox):
                 angled_box_array.angledbox_array.append(AngledBox(boxes.id[i], box.tolist()))
             self.pub.publish(angled_box_array)
+
+
 
     def wait_for_new_image(self):
         """ waits until image_callback announce a new image"""
@@ -103,7 +104,7 @@ class Visualizer(object):
 
             return color
 
-        if detected > 0:
+        if boxes is not None:
             boxes = boxes.to_bbox8()
 
             for i, box in enumerate(boxes.bbox):
