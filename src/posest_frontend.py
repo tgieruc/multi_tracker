@@ -38,10 +38,10 @@ class NodeControl(object):
         redetect_time = rospy.get_param("/posest/frontend/redetect_time")
         number_drones = rospy.get_param("/posest/frontend/number_drones")
 
-        track_thresh = rospy.get_param("/posest/frontent/bytetrack/track_thresh")
-        device = rospy.get_param("/posest/frontent/bytetrack/device")
-        track_buffer = rospy.get_param("/posest/frontent/bytetrack/track_buffer")
-        match_thresh = rospy.get_param("/posest/frontent/bytetrack/match_thresh")
+        track_thresh = rospy.get_param("/posest/frontend/bytetrack/track_thresh")
+        device = rospy.get_param("/posest/frontend/bytetrack/device")
+        track_buffer = rospy.get_param("/posest/frontend/bytetrack/track_buffer")
+        match_thresh = rospy.get_param("/posest/frontend/bytetrack/match_thresh")
 
         self.params = {"detector": detector,
                        "detector_weights": detector_weights,
@@ -60,7 +60,8 @@ class NodeControl(object):
                        }
 
     def spin(self):
-        self.wait_for_new_image()
+        # self.wait_for_new_image()
+        rospy.wait_for_message(self.params["input"], Image)
         detected, boxes, mask = self.frontend.detect(self.frame)
         if self.params["visualize"]:
             self.visualizer.show(self.frame, detected, boxes, mask)
@@ -75,11 +76,10 @@ class NodeControl(object):
 
 
 
-    def wait_for_new_image(self):
-        """ waits until image_callback announce a new image"""
-        while not self.new_image:
-            pass
-        self.new_image = False
+    # def wait_for_new_image(self):
+    #     """ waits until image_callback announce a new image"""
+    #     while not self.new_image:
+    #     self.new_image = False
 
     def image_callback(self, ros_image):
         """Callback when a new image arrives, transforms it in cv2 image and set self.new_image to True"""
@@ -124,7 +124,7 @@ class Visualizer(object):
 
 if __name__ == '__main__':
     rospy.init_node('posest_frontend_node', anonymous=True)
-    loop_rate = rospy.Rate(10)
+    loop_rate = rospy.Rate(100)
 
     my_node = NodeControl()
     while not rospy.is_shutdown():
