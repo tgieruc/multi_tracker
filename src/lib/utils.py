@@ -34,8 +34,8 @@ class Bbox4(object):
 
     def to_bbox5(self):
         box = self.bbox.reshape(-1, 2, 2)
-        center = box.mean(2)
-        width = 2 * (box.mean(1) - box.reshape(-1, 4)[:, :2])
+        center = box.mean(1)
+        width = 2 * (center - box.reshape(-1, 4)[:, :2])
         return Bbox5(self.id, np.hstack([center, width, np.zeros((box.shape[0], 1))]))
 
     def to_bbox8(self):
