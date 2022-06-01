@@ -19,10 +19,9 @@ class NodeControl(object):
         self.bridge = CvBridge()
         self.params = {}
         self.get_param()
+        self.frontend = Frontend(self.params)
         if self.params["visualize"]:
             self.visualizer = Visualizer(self.params["input"])
-        self.frontend = Frontend(self.params)
-
         rospy.Subscriber(self.params["input"], Image, self.image_callback)
         self.pub = rospy.Publisher("/posest/AngledBoxArray", AngledBoxArray, queue_size=10)
 

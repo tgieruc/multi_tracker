@@ -4,6 +4,7 @@ project(posest_frontend)
 
 find_package(catkin REQUIRED COMPONENTS
   rospy
+  message_generation
 )
 
 
@@ -28,6 +29,13 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${INCLUDE_DIRS}
 )
+
+
+add_message_files(
+   FILES
+   AngledBox.msg
+   AngledBoxArray.msg
+ )
 
 
 #############

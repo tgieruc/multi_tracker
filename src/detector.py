@@ -38,7 +38,7 @@ class Detector(object):
                 index_threshold[self.params["number_drones"]-1:] = False
                 if self.params["detector_only"]:
                     results.xyxy[0].data[index_threshold, 4] = 1
-                return len(torch.where(index_threshold == True)[0]), results.xyxy[0].data[index_threshold,:5].cpu()
+                return len(torch.where(index_threshold == True)[0]), results.xyxy[0].data[index_threshold,:4].cpu()
         else:
             if len(results) > 0:
                 n_result = len(results["instances"].pred_boxes)
@@ -48,6 +48,6 @@ class Detector(object):
                     index_threshold = scores > 0.5
                     index_threshold[self.params["number_drones"] - 1:] = False
 
-                    return len(torch.where(index_threshold == True)[0]), torch.cat([box, scores[:,None]], dim=1)[index_threshold]
+                    return len(torch.where(index_threshold == True)[0]), box[index_threshold]
 
         return 0, None
