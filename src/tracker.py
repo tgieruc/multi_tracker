@@ -12,7 +12,7 @@ from pysot.tracker.tracker_builder import build_tracker
 
 class Tracker(object):
     def __init__(self, params, path):
-        cfg.merge_from_file(path + '/frontend_config/' + params["tracker_config"])
+        cfg.merge_from_file(path + '/multi_tracker_config/' + params["tracker_config"])
         cfg.CUDA = torch.cuda.is_available() and cfg.CUDA
         device = torch.device('cuda' if cfg.CUDA else 'cpu')
 
@@ -20,7 +20,7 @@ class Tracker(object):
         model = ModelBuilder()
 
         # load model
-        model.load_state_dict(torch.load(path + '/frontend_config/' + params["tracker_weights"],
+        model.load_state_dict(torch.load(path + '/multi_tracker_config/' + params["tracker_weights"],
                               map_location=lambda storage, loc: storage.cpu()))
         model.eval().to(device)
 

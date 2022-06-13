@@ -15,13 +15,13 @@ class Detector(object):
         print("--.Loading detection model.--")
         if self.params["detector"] == "YOLOv5":
             self.model = torch.hub.load(path + '/src/lib/yolov5', 'custom',
-                                        path + '/frontend_config/' + self.params["detector_weights"], source='local',
+                                        path + '/multi_tracker_config/' + self.params["detector_weights"], source='local',
                                         force_reload=True)
 
         elif self.params["detector"] == "Detectron2":
             cfg = get_cfg()
-            cfg.merge_from_file(path + '/frontend_config/' + self.params["detector_config"])
-            cfg.MODEL.WEIGHTS = path + '/frontend_config/' + self.params["detector_weights"]
+            cfg.merge_from_file(path + '/multi_tracker_config/' + self.params["detector_config"])
+            cfg.MODEL.WEIGHTS = path + '/multi_tracker_config/' + self.params["detector_weights"]
 
             self.model = DefaultPredictor(cfg)
 
@@ -35,10 +35,10 @@ class Detector(object):
         if self.params["detector"] == "YOLOv5":
             if len(results.xyxy[0]) > 0:
                 index_threshold = results.xyxy[0].data[:, 4] > 0.5
-                index_threshold[self.params["number_drones"]-1:] = False
+                index_threshold[self.params["number_objects"]-1:] = False
                 if self.params["detector_only"]:
                     results.xyxy[0].data[index_threshold, 4] = 1
-                return len(torch.where(index_threshold == True)[0]), results.xyxy[0].data[index_threshold,:4].cpu()
+                return len(torch.where(index_threshold == True)[0]), results.xyxy[0].data[index_threshold,:5].cpu()
         else:
             if len(results) > 0:
                 n_result = len(results["instances"].pred_boxes)
@@ -46,8 +46,8 @@ class Detector(object):
                     box = results["instances"].pred_boxes.tensor.cpu()
                     scores = results["instances"].scores.cpu()
                     index_threshold = scores > 0.5
-                    index_threshold[self.params["number_drones"] - 1:] = False
+                    index_threshold[self.params["number_objects"] - 1:] = False
 
-                    return len(torch.where(index_threshold == True)[0]), box[index_threshold]
+                    return len(torch.where(index_threshold == True)[0]), torch.cat([box, scores[:,None]], dim=1)[index_threshold]
 
         return 0, None

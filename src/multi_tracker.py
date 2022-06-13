@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
 import cv2
+import time
 import numpy as np
 
 import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
-from quad_msgs.msg import AngledBox, AngledBoxArray
-# from lib.utils import Bbox4, Bbox5, Bbox8
+from std_msgs.msg import Float32
+from angledbox_msgs.msg import AngledBox, AngledBoxArray
 from frontend import Frontend
 
 
@@ -23,24 +24,26 @@ class NodeControl(object):
         if self.params["visualize"]:
             self.visualizer = Visualizer(self.params["input"])
         rospy.Subscriber(self.params["input"], Image, self.image_callback)
-        self.pub = rospy.Publisher("/posest/AngledBoxArray", AngledBoxArray, queue_size=10)
+        self.pub = rospy.Publisher("angledbox_array", AngledBoxArray, queue_size=0)
+        self.time_pub = rospy.Publisher("multi_tracker/inference_time", Float32, queue_size=0)
+        self.time_buffer = np.zeros(50)
 
     def get_param(self):
-        detector = rospy.get_param("/posest/frontend/detector/name")
-        detector_weights = rospy.get_param("/posest/frontend/detector/weights")
-        detector_config = rospy.get_param("posest/frontend/detector/config")
-        tracker_config = rospy.get_param("/posest/frontend/tracker/config")
-        tracker_weights = rospy.get_param("/posest/frontend/tracker/weights")
-        input = rospy.get_param("/posest/frontend/input")
-        visualize = rospy.get_param("/posest/frontend/visualize")
-        detector_only = rospy.get_param("/posest/frontend/detector_only")
-        redetect_time = rospy.get_param("/posest/frontend/redetect_time")
-        number_drones = rospy.get_param("/posest/frontend/number_drones")
+        detector = rospy.get_param("multi_tracker/detector/name")
+        detector_weights = rospy.get_param("multi_tracker/detector/weights")
+        detector_config = rospy.get_param("multi_tracker/detector/config")
+        tracker_config = rospy.get_param("multi_tracker/tracker/config")
+        tracker_weights = rospy.get_param("multi_tracker/tracker/weights")
+        input = rospy.get_param("multi_tracker/input")
+        visualize = rospy.get_param("multi_tracker/visualize")
+        detector_only = rospy.get_param("multi_tracker/detector_only")
+        redetect_time = rospy.get_param("multi_tracker/redetect_time")
+        number_objects = rospy.get_param("multi_tracker/number_object")
 
-        track_thresh = rospy.get_param("/posest/frontend/bytetrack/track_thresh")
-        device = rospy.get_param("/posest/frontend/bytetrack/device")
-        track_buffer = rospy.get_param("/posest/frontend/bytetrack/track_buffer")
-        match_thresh = rospy.get_param("/posest/frontend/bytetrack/match_thresh")
+        track_thresh = rospy.get_param("multi_tracker/bytetrack/track_thresh")
+        device = rospy.get_param("multi_tracker/bytetrack/device")
+        track_buffer = rospy.get_param("multi_tracker/bytetrack/track_buffer")
+        match_thresh = rospy.get_param("multi_tracker/bytetrack/match_thresh")
 
         self.params = {"detector": detector,
                        "detector_weights": detector_weights,
@@ -51,7 +54,7 @@ class NodeControl(object):
                        "visualize": visualize,
                        "detector_only": detector_only,
                        "redetect_time": redetect_time,
-                       "number_drones": number_drones,
+                       "number_objects": number_objects,
                        "track_thresh": track_thresh,
                        "device": device,
                        "track_buffer": track_buffer,
@@ -59,7 +62,7 @@ class NodeControl(object):
                        }
 
     def spin(self):
-        # self.wait_for_new_image()
+        t0 = time.time()
         rospy.wait_for_message(self.params["input"], Image)
         detected, boxes, mask = self.frontend.detect(self.frame)
         if self.params["visualize"]:
@@ -72,13 +75,9 @@ class NodeControl(object):
             for i, box in enumerate(boxes.bbox):
                 angled_box_array.angledbox_array.append(AngledBox(boxes.id[i], box.tolist()))
             self.pub.publish(angled_box_array)
-
-
-
-    # def wait_for_new_image(self):
-    #     """ waits until image_callback announce a new image"""
-    #     while not self.new_image:
-    #     self.new_image = False
+        self.time_buffer = np.roll(self.time_buffer, 1)
+        self.time_buffer[0] = time.time() - t0
+        self.time_pub.publish(np.mean(self.time_buffer))
 
     def image_callback(self, ros_image):
         """Callback when a new image arrives, transforms it in cv2 image and set self.new_image to True"""
@@ -122,10 +121,10 @@ class Visualizer(object):
 
 
 if __name__ == '__main__':
-    rospy.init_node('posest_frontend_node', anonymous=True)
+    rospy.init_node('multi_tracker_node', anonymous=True)
     loop_rate = rospy.Rate(100)
 
     my_node = NodeControl()
     while not rospy.is_shutdown():
         my_node.spin()
-        loop_rate.sleep()
+        # loop_rate.sleep()

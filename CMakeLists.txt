@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(posest_frontend)
+project(multi_tracker)
 
 
 find_package(catkin REQUIRED COMPONENTS
   rospy
-  message_generation
+  angledbox_msgs
 )
 
 
@@ -14,7 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES posest_front
- CATKIN_DEPENDS cv_bridge quad_msg rospy sensor_msg
+ CATKIN_DEPENDS cv_bridge rospy sensor_msg
 #  DEPENDS system_lib
 )
 
@@ -29,13 +29,6 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${INCLUDE_DIRS}
 )
-
-
-add_message_files(
-   FILES
-   AngledBox.msg
-   AngledBoxArray.msg
- )
 
 
 #############
@@ -62,7 +55,7 @@ execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install -e ${CMAKE_CURRENT_
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  src/posest_frontend.py
+  src/multi_tracker.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

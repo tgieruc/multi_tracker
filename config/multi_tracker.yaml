@@ -1,0 +1,16 @@
+multi_tracker/detector/name: YOLOv5
+multi_tracker/detector/weights: yolov5_simulation.pt
+multi_tracker/detector/config: ""
+multi_tracker/tracker/config:  siammask_config.yaml
+multi_tracker/tracker/weights:  siammask_model.pth
+multi_tracker/detector_only: false
+multi_tracker/input: /quad98/camera/image_raw
+multi_tracker/visualize: true
+multi_tracker/redetect_time: 2.0
+multi_tracker/number_object: 3
+
+
+multi_tracker/bytetrack/track_thresh: 0.5
+multi_tracker/bytetrack/device: "gpu"
+multi_tracker/bytetrack/track_buffer: 30
+multi_tracker/bytetrack/match_thresh: 0.8

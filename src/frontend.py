@@ -1,10 +1,9 @@
 import time
 import rospkg
 import numpy as np
-import torch
 from detector import Detector
 from tracker import Tracker
-from lib.utils import Bbox4, Bbox5, Bbox8
+from lib.utils import Bbox4, Bbox8
 
 import sys, os
 
@@ -12,24 +11,22 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "lib/ByteTrack"))
 from yolox.tracker.byte_tracker import BYTETracker
 
 
-
-
-
 class Frontend(object):
     def __init__(self, params):
         self.params = params
         rospack = rospkg.RosPack()
-        path = rospack.get_path('posest_frontend')
+        path = rospack.get_path('multi_tracker')
         self.detector = Detector(self.params, path)
-        self.bytetracker = BYTETracker(self.params)
-        if not params["detector_only"]:
+        if params["detector_only"]:
+            self.bytetracker = BYTETracker(self.params)
+        else:
             self.tracker = []
-            for i in range(self.params["number_drones"] - 1):
+            for i in range(self.params["number_objects"] - 1):
                 self.tracker.append(Tracker(self.params, path))
-            self.active_tracker = np.zeros(self.params["number_drones"] - 1, dtype=bool)
+            self.active_tracker = np.zeros(self.params["number_objects"] - 1, dtype=bool)
         self.n_detection = 0
         self.last_detection_time = time.time()
-        self.tracker_center = np.zeros((self.params["number_drones"] - 1, 2))
+        self.tracker_center = np.zeros((self.params["number_objects"] - 1, 2))
         self.frame = None
 
     def detection(self):
@@ -50,20 +47,19 @@ class Frontend(object):
     def detection_tracking(self):
         self.n_detection, inference = self.detector.inference(self.frame)
         if self.n_detection > 0:
-            bbox = Bbox4(np.arange(self.n_detection), inference)
+            bbox = Bbox4(np.arange(self.n_detection), inference[:, :4])
             self.update_trackers(bbox)
             return bbox
         else:
             return None
 
-
     def update_trackers(self, bboxes):
         self.last_detection_time = time.time()
 
         if bboxes is None:
-            self.active_tracker = np.zeros(self.params["number_drones"] - 1, dtype=bool)
+            self.active_tracker = np.zeros(self.params["number_objects"] - 1, dtype=bool)
         else:
-            for _ in range(2 *self.params["number_drones"] - 1):
+            for _ in range(2 * self.params["number_objects"] - 1):
                 bboxes_with_tracker = bboxes.is_inside(self.tracker_center)
                 tracker_without_bbox = np.where(bboxes_with_tracker.sum(0) == 0)
                 for id in tracker_without_bbox:
@@ -72,7 +68,7 @@ class Frontend(object):
                 trackers_per_bbox = bboxes_with_tracker.sum(1)
                 ids_too_many_tracker = np.where(trackers_per_bbox > 1)
                 for i in ids_too_many_tracker:
-                    tracker_to_disable = np.where(bboxes_with_tracker[i,:] == True)[0][1:]
+                    tracker_to_disable = np.where(bboxes_with_tracker[i, :] == True)[0][1:]
                     self.active_tracker[tracker_to_disable] = False
                     self.tracker_center[tracker_to_disable] = np.array([0, 0])
                     bboxes_with_tracker[tracker_to_disable, i] = False
@@ -90,13 +86,14 @@ class Frontend(object):
         if self.params["detector_only"]:
             bboxes = self.detection()
         else:
-            if (self.n_detection == 0) or (((time.time() - self.last_detection_time) > self.params["redetect_time"]) and (
-                        self.params["redetect_time"] != 0)):
+            if (self.n_detection == 0) or (
+                    ((time.time() - self.last_detection_time) > self.params["redetect_time"]) and (
+                    self.params["redetect_time"] != 0)):
                 bboxes = self.detection_tracking()
             if self.n_detection > 0:
                 boxes = []
                 masks = []
-                ids   = []
+                ids = []
                 for id in np.argwhere(self.active_tracker == True).flatten():
                     box, mask = self.tracker[id].track_frame(frame)
                     boxes.append(box)
