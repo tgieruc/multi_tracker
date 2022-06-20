@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<launch>
+
+
+
+    <arg name="ns" default="/" />
+    <group ns="$(arg ns)">
+        <rosparam command="load" file="$(find multi_tracker)/config/multi_tracker_yolo.yaml" />
+        <node name="multi_tracker_node" pkg="multi_tracker" type="multi_tracker.py" output="screen"/>
+    </group>
+
+</launch>

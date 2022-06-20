@@ -23,10 +23,10 @@ class NodeControl(object):
         self.frontend = Frontend(self.params)
         if self.params["visualize"]:
             self.visualizer = Visualizer(self.params["input"])
-        rospy.Subscriber(self.params["input"], Image, self.image_callback)
-        self.pub = rospy.Publisher("angledbox_array", AngledBoxArray, queue_size=0)
+        rospy.Subscriber(self.params["input"], Image, self.image_callback, queue_size=1000)
+        self.bbox_pub = rospy.Publisher("angledbox_array", AngledBoxArray, queue_size=0)
         self.time_pub = rospy.Publisher("multi_tracker/inference_time", Float32, queue_size=0)
-        self.time_buffer = np.zeros(50)
+
 
     def get_param(self):
         detector = rospy.get_param("multi_tracker/detector/name")
@@ -36,7 +36,7 @@ class NodeControl(object):
         tracker_weights = rospy.get_param("multi_tracker/tracker/weights")
         input = rospy.get_param("multi_tracker/input")
         visualize = rospy.get_param("multi_tracker/visualize")
-        detector_only = rospy.get_param("multi_tracker/detector_only")
+        tracker = rospy.get_param("multi_tracker/tracker/name")
         redetect_time = rospy.get_param("multi_tracker/redetect_time")
         number_objects = rospy.get_param("multi_tracker/number_object")
 
@@ -45,6 +45,9 @@ class NodeControl(object):
         track_buffer = rospy.get_param("multi_tracker/bytetrack/track_buffer")
         match_thresh = rospy.get_param("multi_tracker/bytetrack/match_thresh")
 
+        assert (tracker == "PySOT" or tracker == "ByteTrack"), "multi_tracker/tracker/name has to be either ByteTrack or PySOT"
+        assert (detector == "YOLOv5" or detector == "Detectron2"), "multi_tracker/tracker/name has to be either YOLOv5 or Detectron2"
+
         self.params = {"detector": detector,
                        "detector_weights": detector_weights,
                        "detector_config": detector_config,
@@ -52,7 +55,7 @@ class NodeControl(object):
                        "tracker_weights": tracker_weights,
                        "input": input,
                        "visualize": visualize,
-                       "detector_only": detector_only,
+                       "tracker": tracker,
                        "redetect_time": redetect_time,
                        "number_objects": number_objects,
                        "track_thresh": track_thresh,
@@ -64,9 +67,10 @@ class NodeControl(object):
     def spin(self):
         t0 = time.time()
         rospy.wait_for_message(self.params["input"], Image)
+        frame_saved = self.frame
         detected, boxes, mask = self.frontend.detect(self.frame)
         if self.params["visualize"]:
-            self.visualizer.show(self.frame, detected, boxes, mask)
+            boxes_save = boxes
 
         if boxes is not None:
             angled_box_array = AngledBoxArray()
@@ -74,10 +78,10 @@ class NodeControl(object):
             boxes = boxes.to_bbox5()
             for i, box in enumerate(boxes.bbox):
                 angled_box_array.angledbox_array.append(AngledBox(boxes.id[i], box.tolist()))
-            self.pub.publish(angled_box_array)
-        self.time_buffer = np.roll(self.time_buffer, 1)
-        self.time_buffer[0] = time.time() - t0
-        self.time_pub.publish(np.mean(self.time_buffer))
+            self.bbox_pub.publish(angled_box_array)
+        self.time_pub.publish(time.time() - t0)
+        if self.params["visualize"]:
+            self.visualizer.show(frame_saved, detected, boxes_save, mask, 1 / float(time.time() - t0))
 
     def image_callback(self, ros_image):
         """Callback when a new image arrives, transforms it in cv2 image and set self.new_image to True"""
@@ -92,7 +96,7 @@ class Visualizer(object):
         self.input = input_choice
         cv2.namedWindow(input_choice, cv2.WND_PROP_FULLSCREEN)
 
-    def show(self, frame, detected, boxes, masks):
+    def show(self, frame, detected, boxes, masks, fps):
         """Display the frame in a cv2 window. Box is either in xyxy format or polygon xyxyxyxy"""
         frame = np.ascontiguousarray(np.copy(frame))
 
@@ -116,6 +120,7 @@ class Visualizer(object):
                             thickness=2)
             if masks is not None:
                 frame = cv2.addWeighted(frame, 0.77, masks, 0.23, -1)
+        # frame = cv2.putText(frame, f'FPS: {fps:.2f}', (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA, False)
         cv2.imshow(self.input, frame)
         cv2.waitKey(3)
 

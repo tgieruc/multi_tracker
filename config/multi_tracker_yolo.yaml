@@ -1,0 +1,16 @@
+multi_tracker/detector/name: YOLOv5
+multi_tracker/detector/weights: yolov5_simulation.pt
+multi_tracker/detector/config: ""
+multi_tracker/tracker/name: PySOT
+multi_tracker/tracker/config:  siammaske_config.yaml
+multi_tracker/tracker/weights:  siammask_model.pth
+multi_tracker/input: /quad97/camera/image_raw
+multi_tracker/visualize: true
+multi_tracker/redetect_time: 2.0
+multi_tracker/number_object: 4
+
+
+multi_tracker/bytetrack/track_thresh: 0.5
+multi_tracker/bytetrack/device: "gpu"
+multi_tracker/bytetrack/track_buffer: 30
+multi_tracker/bytetrack/match_thresh: 0.8

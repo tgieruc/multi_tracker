@@ -1,13 +1,13 @@
-multi_tracker/detector/name: YOLOv5
-multi_tracker/detector/weights: yolov5_simulation.pt
-multi_tracker/detector/config: ""
+multi_tracker/detector/name: Detectron2
+multi_tracker/detector/weights: detectron_simulation.pth
+multi_tracker/detector/config: detectron_config.yaml
+multi_tracker/tracker/name: ByteTrack
 multi_tracker/tracker/config:  siammask_config.yaml
 multi_tracker/tracker/weights:  siammask_model.pth
-multi_tracker/detector_only: false
-multi_tracker/input: /quad98/camera/image_raw
+multi_tracker/input: /quad97/camera/image_raw
 multi_tracker/visualize: true
 multi_tracker/redetect_time: 2.0
-multi_tracker/number_object: 3
+multi_tracker/number_object: 4
 
 
 multi_tracker/bytetrack/track_thresh: 0.5

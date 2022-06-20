@@ -15,13 +15,13 @@ class Detector(object):
         print("--.Loading detection model.--")
         if self.params["detector"] == "YOLOv5":
             self.model = torch.hub.load(path + '/src/lib/yolov5', 'custom',
-                                        path + '/multi_tracker_config/' + self.params["detector_weights"], source='local',
+                                        path + '/modules_config/' + self.params["detector_weights"], source='local',
                                         force_reload=True)
 
         elif self.params["detector"] == "Detectron2":
             cfg = get_cfg()
-            cfg.merge_from_file(path + '/multi_tracker_config/' + self.params["detector_config"])
-            cfg.MODEL.WEIGHTS = path + '/multi_tracker_config/' + self.params["detector_weights"]
+            cfg.merge_from_file(path + '/modules_config/' + self.params["detector_config"])
+            cfg.MODEL.WEIGHTS = path + '/modules_config/' + self.params["detector_weights"]
 
             self.model = DefaultPredictor(cfg)
 
@@ -36,7 +36,7 @@ class Detector(object):
             if len(results.xyxy[0]) > 0:
                 index_threshold = results.xyxy[0].data[:, 4] > 0.5
                 index_threshold[self.params["number_objects"]-1:] = False
-                if self.params["detector_only"]:
+                if self.params["tracker"] == "ByteTrack":
                     results.xyxy[0].data[index_threshold, 4] = 1
                 return len(torch.where(index_threshold == True)[0]), results.xyxy[0].data[index_threshold,:5].cpu()
         else:

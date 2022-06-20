@@ -5,7 +5,7 @@
 
     <arg name="ns" default="/" />
     <group ns="$(arg ns)">
-        <rosparam command="load" file="$(find multi_tracker)/config/multi_tracker.yaml" />
+        <rosparam command="load" file="$(find multi_tracker)/config/multi_tracker_detectron.yaml" />
         <node name="multi_tracker_node" pkg="multi_tracker" type="multi_tracker.py" output="screen"/>
     </group>
 

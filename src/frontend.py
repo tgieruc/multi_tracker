@@ -17,7 +17,7 @@ class Frontend(object):
         rospack = rospkg.RosPack()
         path = rospack.get_path('multi_tracker')
         self.detector = Detector(self.params, path)
-        if params["detector_only"]:
+        if params["tracker"] == "ByteTrack":
             self.bytetracker = BYTETracker(self.params)
         else:
             self.tracker = []
@@ -83,7 +83,7 @@ class Frontend(object):
         masks = None
         self.frame = frame
         bboxes = None
-        if self.params["detector_only"]:
+        if self.params["tracker"] == "ByteTrack":
             bboxes = self.detection()
         else:
             if (self.n_detection == 0) or (
