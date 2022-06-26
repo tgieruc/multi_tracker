@@ -16,7 +16,7 @@ then use Catkin to build the package.
 
 
 ## Settings
-ROS configuration file is located in the *config* folder. Two example files are provided, one for Detectron2 and another one for YOLOv5. All configuration files for the modules have to be stored in the *modules_config* folder.
+ROS configuration file is located in the *config* folder. Two example files are provided, [here](https://github.com/tgieruc/multi_tracker/blob/master/config/multi_tracker_detectron.yaml) for Detectron2 and [here](https://github.com/tgieruc/multi_tracker/blob/master/config/multi_tracker_yolo.yaml) for YOLOv5. All configuration files for the modules have to be stored in the *modules_config* folder.
 
 All paths specified in the ROS config file are relative to the *modules_config* folder. No parameters can be left empty, unused parameters can be set at *""*.
 
