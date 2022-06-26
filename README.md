@@ -1,6 +1,6 @@
 # Multi-tracker
 
-Multi-tracker is a package for multi-object tracking with ROS Noetic. Its modular design allows the user to chose between [YOLOv5](https://github.com/ultralytics/yolov5) and [Detectron2](https://github.com/facebookresearch/detectron2) for the object detector and [ByteTrack](https://github.com/ifzhang/ByteTrack) or [PySOT](https://github.com/STVIR/pysot) for the tracker.
+Multi-tracker is a package for multi-object tracking with ROS Noetic. Its modular design allows the user to chose between [YOLOv5](https://github.com/ultralytics/yolov5) and [Detectron2](https://github.com/facebookresearch/detectron2) as object detectors and [ByteTrack](https://github.com/ifzhang/ByteTrack) or [PySOT](https://github.com/STVIR/pysot) as object trackers.
 
 It is designed as frontend for the [MSL-RAPTOR package](https://github.com/tgieruc/msl_raptor).
 
