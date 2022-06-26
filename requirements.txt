@@ -19,21 +19,6 @@ tensorboard>=2.4.1
 # Plotting ------------------------------------
 pandas>=1.1.4
 seaborn>=0.11.0
-
-# Export --------------------------------------
-# coremltools>=4.1  # CoreML export
-# onnx>=1.9.0  # ONNX export
-# onnx-simplifier>=0.3.6  # ONNX simplifier
-# scikit-learn==0.19.2  # CoreML quantization
-# tensorflow>=2.4.1  # TFLite export
-# tensorflowjs>=3.9.0  # TF.js export
-# openvino-dev  # OpenVINO export
-
-# Extras --------------------------------------
-# albumentations>=1.0.3
-# Cython  # for pycocotools https://github.com/cocodataset/cocoapi/issues/172
-# pycocotools>=2.0  # COCO mAP
-# roboflow
 thop~=0.0.31-2005241907
 
 # PYSOT
@@ -55,9 +40,9 @@ rospkg~=1.4.0
 python-dateutil~=2.8.2
 catkin_pkg~=0.4.24
 empy~=3.3.4
-dbus
 gnupg~=2.3.1
 defusedxml~=0.7.1
 pydot~=1.4.2
-cairo~=1.16.0
 docutils~=0.18.1
+pycairo
+dbus-python

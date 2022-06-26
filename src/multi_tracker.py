@@ -24,7 +24,7 @@ class NodeControl(object):
         if self.params["visualize"]:
             self.visualizer = Visualizer(self.params["input"])
         rospy.Subscriber(self.params["input"], Image, self.image_callback, queue_size=1000)
-        self.bbox_pub = rospy.Publisher("angledbox_array", AngledBoxArray, queue_size=0)
+        self.bbox_pub = rospy.Publisher("multi_tracker/angledbox_array", AngledBoxArray, queue_size=0)
         self.time_pub = rospy.Publisher("multi_tracker/inference_time", Float32, queue_size=0)
 
 
