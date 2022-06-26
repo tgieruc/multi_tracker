@@ -4,6 +4,8 @@ Multi-tracker is a package for multi-object tracking with ROS Noetic. Its modula
 
 It is designed as frontend for the [MSL-RAPTOR package](https://github.com/tgieruc/msl_raptor).
 
+It requires [angledbox_msgs](https://github.com/tgieruc/angledbox_msgs) to communicate.
+
 ## Installation
 In your ROS workspace source folder, clone the repository with its submodules using 
 
