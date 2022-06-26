@@ -36,3 +36,7 @@ All paths specified in the ROS config file are relative to the *modules_config* 
 * multi_tracker/bytetrack/device: either *"cpu"* or *"gpu"*
 * multi_tracker/bytetrack/track_buffer: only for ByteTrack, see ByteTrack documentation for specific information
 * multi_tracker/bytetrack/match_thresh: only for ByteTrack, see ByteTrack documentation for specific information
+
+# Contact
+
+For any questions, please email me at <theo.gieruc@gmail.com>
