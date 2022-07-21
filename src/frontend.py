@@ -107,9 +107,7 @@ class Frontend(object):
 
                 else:
                     bboxes = None
-                if len(masks) > 0:
-                    masks = np.array(masks).max(0)
-                else:
+                if len(masks) == 0:
                     masks = None
 
                 self.tracker_center[ids] = bboxes.center()

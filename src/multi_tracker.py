@@ -8,7 +8,7 @@ import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
-from angledbox_msgs.msg import AngledBox, AngledBoxArray
+from multi_tracker_msgs.msg import AngledBox, AngledBoxArray, MaskArray
 from frontend import Frontend
 
 
@@ -25,6 +25,7 @@ class NodeControl(object):
             self.visualizer = Visualizer(self.params["input"])
         rospy.Subscriber(self.params["input"], Image, self.image_callback, queue_size=1000)
         self.bbox_pub = rospy.Publisher("multi_tracker/angledbox_array", AngledBoxArray, queue_size=0)
+        self.mask_pub = rospy.Publisher("multi_tracker/mask", MaskArray, queue_size=0)
         self.time_pub = rospy.Publisher("multi_tracker/inference_time", Float32, queue_size=0)
 
 
@@ -79,6 +80,11 @@ class NodeControl(object):
             for i, box in enumerate(boxes.bbox):
                 angled_box_array.angledbox_array.append(AngledBox(boxes.id[i], box.tolist()))
             self.bbox_pub.publish(angled_box_array)
+        if mask is not None:
+            mask_array = MaskArray()
+            for mask_ in mask:
+                mask_array.mask_array.append(self.bridge.cv2_to_imgmsg(np.array(mask_)))
+            self.mask_pub.publish(mask_array)
         self.time_pub.publish(time.time() - t0)
         if self.params["visualize"]:
             self.visualizer.show(frame_saved, detected, boxes_save, mask, 1 / float(time.time() - t0))
@@ -119,7 +125,7 @@ class Visualizer(object):
                 cv2.putText(frame, id_text, (intbox[0, 0, 0], intbox[0, 0, 1]), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255),
                             thickness=2)
             if masks is not None:
-                frame = cv2.addWeighted(frame, 0.77, masks, 0.23, -1)
+                frame = cv2.addWeighted(frame, 0.77, np.array(masks).max(0), 0.23, -1)
         # frame = cv2.putText(frame, f'FPS: {fps:.2f}', (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA, False)
         cv2.imshow(self.input, frame)
         cv2.waitKey(3)

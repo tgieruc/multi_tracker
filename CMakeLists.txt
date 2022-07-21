@@ -4,7 +4,6 @@ project(multi_tracker)
 
 find_package(catkin REQUIRED COMPONENTS
   rospy
-  angledbox_msgs
 )
 
 
@@ -14,7 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES posest_front
- CATKIN_DEPENDS cv_bridge rospy sensor_msg
+ CATKIN_DEPENDS cv_bridge rospy sensor_msg multi_tracker_msgs
 #  DEPENDS system_lib
 )
 
@@ -36,18 +35,6 @@ include_directories(
 #############
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-
-# detect virtualenv and set Pip args accordingly
-if(DEFINED ENV{VIRTUAL_ENV} OR DEFINED ENV{CONDA_PREFIX})
-  set(_pip_args)
-else()
-  set(_pip_args "--user")
-endif()
-
-
-execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install -r ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt)
-
-execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install -e ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/detectron2)
 
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
